@@ -1,34 +1,53 @@
-
 <p align="center">
-  <img src="media/banner.png" alt="AI Fitness Trainer Banner" width="800">
+  <img src="media/banner.png" alt="FitMate Banner" width="800">
 </p>
 
-# AI Fitness Trainer (Desktop App)
+<h1 align="center">FitMate: Desktop Application</h1>
 
-## 📚 Overview
-Welcome to **FitMate** — a real-time desktop application that analyzes your exercises using AI-based pose estimation.  
-Get **instant feedback**, **count your reps**, and **improve your form** using cutting-edge 3D body tracking technology powered by **MediaPipe**.
-
----
-
-## 🎯 Supported Exercises
-- 💪 **Bicep Curl**
-- 🏋️ **Lunge**
-- 🏋️ **Squat**
-- 🤸 **Push-Ups**
-- 🏋️‍♂️ **Shoulder Press**
-- 🏋️‍♂️ **Deadlift**
-
-Each exercise provides real-time feedback and tracks reps based on your movement and joint angles.
+<p align="center">
+  Empower your workout with real-time AI analysis and feedback.
+</p>
 
 ---
 
-## 🛠️ Technologies Used
-- Python 3
-- OpenCV
-- PyQt5 (for GUI)
-- MediaPipe Pose (3D Landmark Model)
-- NumPy
+## 📖 Overview
+
+**FitMate** is a desktop application that acts as your personal fitness companion, providing **instant feedback**, **repetition counting**, and **form correction** using advanced **3D pose estimation** powered by **MediaPipe**.  
+No wearables, no expensive hardware — just a camera, your body, and FitMate.
+
+Whether you're performing squats, push-ups, or shoulder presses, FitMate helps you stay safe and effective with every rep.
+
+---
+
+## 🖼️ App Interface Mockup
+
+<p align="center">
+  <img src="media/mockup.png" alt="FitMate Desktop App Mockup" width="800">
+</p>
+
+---
+
+## 🏋️ Supported Exercises
+
+✔️ **Bicep Curl**  
+✔️ **Lunge**  
+✔️ **Squat**  
+✔️ **Push-Ups**  
+✔️ **Shoulder Press**  
+✔️ **Deadlift**
+
+Each exercise is analyzed using key joint angles, with automated side detection (left/right) and real-time corrective feedback.
+
+---
+
+## 🛠️ Built With
+
+- 🐍 **Python 3**
+- 📸 **OpenCV** – for video processing
+- 🤖 **MediaPipe Pose (3D Landmark Model)** – for pose estimation
+- 🖥️ **PyQt5** – for user interface
+- 🧮 **NumPy** – for mathematical computations
+- 🔊 **pyttsx3** – for text-to-speech audio feedback
 
 ---
 
@@ -50,35 +69,56 @@ Each exercise provides real-time feedback and tracks reps based on your movement
    python main.py
    ```
 
----
-
-## 🎥 Screenshots & Demos
-
-| Exercise | Demo |
-| :--- | :--- |
-| Bicep Curl | ![](media/bicep.gif) |
-| Squat | ![](media/squat.gif) |
-| Lunge | ![](media/lunge.gif) |
-| Push-Ups | ![](media/pushup.gif) |
-| Shoulder Press | ![](media/shoulder_press.gif) |
-| Deadlift | ![](media/deadlift.gif) |
+✅ You’re now ready to train with FitMate!
 
 ---
 
-## ⚡ How It Works
+## 🎥 Demo Previews
 
-- Real-time webcam capture
-- Detects **3D body landmarks** using MediaPipe
-- Calculates important joint angles for each exercise
-- Gives immediate feedback if your form needs adjustment
-- Counts the number of correct repetitions automatically
-
----
-
-## 📢 Notes
-- Make sure your **full body is visible** in the camera.
-- Use a **well-lit environment** for better pose detection.
-- Supports both **frontal** and **side views** depending on the exercise.
+| Exercise        | Demo                                    |
+|----------------|----------------------------------------|
+| Bicep Curl      | ![](media/bicep.gif)                   |
+| Squat           | ![](media/squat.gif)                   |
+| Lunge           | ![](media/lunge.gif)                   |
+| Push-Ups        | ![](media/pushup.gif)                  |
+| Shoulder Press  | ![](media/shoulder_press.gif)          |
+| Deadlift        | ![](media/deadlift.gif)                |
 
 ---
 
+## ⚙️ How FitMate Works
+
+1. Captures video input from your webcam.
+2. Detects **33 body landmarks** in real-time using MediaPipe’s 3D pose model.
+3. Calculates joint angles relevant to the selected exercise.
+4. Tracks movement through exercise phases (e.g., up, down).
+5. Provides:
+   - ✅ **Positive feedback** for correct form
+   - ⚠️ **Warnings** for unsafe or incorrect posture
+   - 🔢 **Automatic rep counting**
+6. Offers **audio feedback** via speech synthesis.
+
+---
+
+## 💡 Pro Tips
+
+- Ensure **full body visibility** in the camera frame.
+- Use a **well-lit space** to improve detection accuracy.
+- Maintain an appropriate **distance from the camera** (about 1.5–2 meters).
+- Supports both **frontal** and **side views** depending on exercise type.
+
+---
+
+## 📝 Future Directions
+
+- Mobile app development for portability
+- Integration with cloud services for progress tracking
+- Enhanced body alignment calibration
+- Custom AI models (e.g., Vision Transformers, YOLO) for improved pose accuracy
+- Health metrics analysis and long-term monitoring
+
+---
+
+<p align="center">
+  Made with ❤️ by Team FitMate
+</p>
