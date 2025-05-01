@@ -1,12 +1,32 @@
 import math
 from threading import Thread
 from mediapipe import solutions as solutions
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
-from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QThread
+from PyQt5.QtCore import Qt, pyqtSignal, pyqtSlot, QThread, QFile
 from PyQt5.QtGui import QImage, QPixmap, QFont
 import cv2
 import numpy as np
-from utils.helpers import speak
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
+                             QPushButton, QLabel, QGridLayout,
+                             QStackedWidget, QGroupBox, QHBoxLayout, QRadioButton, QApplication)
+import sys
+import pyttsx3
+
+def load_stylesheet(file_path):
+    """Load QSS stylesheet from file."""
+    file_path = file_path.replace('/', '\\')
+    qss_file = QFile(file_path)
+    if qss_file.exists():
+        qss_file.open(QFile.ReadOnly)
+        stylesheet = str(qss_file.readAll(), encoding='utf-8')
+        return stylesheet
+    return ""
+
+def speak(text):
+    engine = pyttsx3.init()
+    engine.setProperty('rate', 170)  # Speed (default is around 200)
+    engine.setProperty('volume', 1.0)  # Volume: 0.0 to 1.0
+    engine.say(text)
+    engine.runAndWait()
 
 # Initialize MediaPipe Pose
 mp_pose = solutions.pose
@@ -29,8 +49,13 @@ class VideoThread(QThread):
 
         # Set up MediaPipe pose detection
         with mp_pose.Pose(
+                static_image_mode=False,
+                model_complexity=1,
                 min_detection_confidence=0.75,
-                min_tracking_confidence=0.6) as pose:
+                min_tracking_confidence=0.6,
+                enable_segmentation=False,
+                smooth_landmarks=True
+                ) as pose:
 
             while self.running:
                 ret, frame = cap.read()
@@ -76,7 +101,6 @@ class ExerciseWidget(QWidget):
         self.exercise_name = exercise_name
         self.video_thread = None
         self.voice_status = voice_status
-        print(self.voice_status)
 
         # Exercise state tracking
         self.rep_count = 0
@@ -186,11 +210,11 @@ class ExerciseWidget(QWidget):
 
     def calculate_angle(self, a, b, c):
         """
-        Calculate the angle between three points
+        Calculate the angle between three points in 3D space
         Args:
-            a: first point [x, y]
-            b: mid point [x, y]
-            c: end point [x, y]
+            a: first point [x, y, z]
+            b: mid point [x, y, z]
+            c: end point [x, y, z]
         Returns:
             angle in degrees
         """
@@ -204,7 +228,7 @@ class ExerciseWidget(QWidget):
 
         # Calculate cosine of angle using dot product
         cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
-        cosine_angle = np.clip(cosine_angle, -1.0, 1.0)  # Ensure within domain of arccos
+        cosine_angle = np.clip(cosine_angle, -1.0, 1.0)  # Avoid NaNs
 
         # Calculate angle in degrees
         angle = np.arccos(cosine_angle)
@@ -227,12 +251,16 @@ class ExerciseWidget(QWidget):
         # Calculate moving average
         return sum(self.angle_history[angle_id]) / len(self.angle_history[angle_id])
 
-    def get_coordinates(self, landmarks, landmark_id):
-        """Extract x,y coordinates from a landmark"""
+    def get_coordinates(self, landmarks, landmark_id, use_3d=False):
+        """Extract coordinates from a landmark (2D or 3D)"""
         if landmarks:
             landmark = landmarks[landmark_id]
-            return [landmark.x, landmark.y]
+            if use_3d:
+                return [landmark.x, landmark.y, landmark.z]
+            else:
+                return [landmark.x, landmark.y]
         return None
+
 
     def check_view_position(self, frame, results):
         """
@@ -291,15 +319,26 @@ class ExerciseWidget(QWidget):
         return False, "Checking your position..."
 
     def analyze_deadlift(self, landmarks):
-        """Analyze deadlift form and count reps"""
+        """Analyze deadlift form and count reps using 3D and dynamic side detection."""
         feedback = ""
         count_rep = False
 
-        # Get key landmarks
-        shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_SHOULDER.value)
-        hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_HIP.value)
-        knee = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_KNEE.value)
-        ankle = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_ANKLE.value)
+        # Decide which side to analyze
+        left_shoulder_z = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].z
+        right_shoulder_z = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].z
+
+        side = "left" if left_shoulder_z < right_shoulder_z else "right"
+
+        if side == "left":
+            shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_SHOULDER.value, use_3d=True)
+            hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_HIP.value, use_3d=True)
+            knee = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_KNEE.value, use_3d=True)
+            ankle = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_ANKLE.value, use_3d=True)
+        else:
+            shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_SHOULDER.value, use_3d=True)
+            hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_HIP.value, use_3d=True)
+            knee = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_KNEE.value, use_3d=True)
+            ankle = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_ANKLE.value, use_3d=True)
 
         if None in [shoulder, hip, knee, ankle]:
             return "Cannot detect all necessary body points. Adjust your position.", False
@@ -315,7 +354,7 @@ class ExerciseWidget(QWidget):
         hip_angle = self.smooth_angle("hip", hip_angle)
 
         # Detect deadlift phases
-        if not self.rep_started and hip_angle > self.max_hip_angle and knee_angle > self.max_knee_angle:  # Standing position
+        if not self.rep_started and hip_angle > self.max_hip_angle and knee_angle > self.max_knee_angle:
             self.rep_started = True
             self.current_state = "starting"
             feedback = "Start your deadlift by hinging at the hips"
@@ -323,22 +362,18 @@ class ExerciseWidget(QWidget):
         if self.rep_started:
             if self.current_state == "starting" and hip_angle < 130 and knee_angle < 130 and \
                     hip_angle > self.min_hip_angle and knee_angle > self.min_knee_angle:
-                # Moving to bottom position
                 self.current_state = "down"
                 feedback = "Keep your back straight"
 
             elif self.current_state == "down" and hip_angle > 160:
-                # Returning to standing
                 self.current_state = "starting"
                 feedback = "Good rep! Stand tall at the top"
                 count_rep = True
 
         # Mistakes
-        # Knee too bent
         if hip_angle < 140 and knee_angle > 130 and self.current_state == "down":
             feedback = "Bend your knee more"
 
-        # If no specific feedback, give general guidance
         if not feedback:
             if self.current_state == "starting":
                 feedback = "Hinge at your hips to begin"
@@ -347,19 +382,31 @@ class ExerciseWidget(QWidget):
 
         return feedback, count_rep
 
+
     def analyze_bicep_curl(self, landmarks):
-        """Analyze bicep curl form and count reps"""
+        """Analyze bicep curl form and count reps using 3D and dynamic side detection."""
         feedback = ""
         count_rep = False
 
-        # Get key landmarks - use left side for side view
-        shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_SHOULDER.value)
-        elbow = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_ELBOW.value)
-        wrist = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_WRIST.value)
-        hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_HIP.value)
+        # Decide which side to analyze
+        left_shoulder_z = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].z
+        right_shoulder_z = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].z
+
+        side = "left" if left_shoulder_z < right_shoulder_z else "right"
+
+        if side == "left":
+            shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_SHOULDER.value, use_3d=True)
+            elbow = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_ELBOW.value, use_3d=True)
+            wrist = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_WRIST.value, use_3d=True)
+            hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.LEFT_HIP.value, use_3d=True)
+        else:
+            shoulder = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_SHOULDER.value, use_3d=True)
+            elbow = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_ELBOW.value, use_3d=True)
+            wrist = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_WRIST.value, use_3d=True)
+            hip = self.get_coordinates(landmarks, mp_pose.PoseLandmark.RIGHT_HIP.value, use_3d=True)
 
         if None in [shoulder, elbow, wrist]:
-            return "Cannot detect arm position, Ensure your arm is visible.", False
+            return "Cannot detect arm position. Ensure your arm is visible.", False
 
         # Calculate elbow angle
         elbow_angle = self.calculate_angle(shoulder, elbow, wrist)
@@ -370,32 +417,27 @@ class ExerciseWidget(QWidget):
         if hip is not None:
             shoulder_hip_elbow = self.calculate_angle(hip, shoulder, elbow)
             shoulder_hip_elbow = self.smooth_angle("arm_swing", shoulder_hip_elbow)
-            # If angle varies too much, arm is swinging
             arm_stable = shoulder_hip_elbow < 40
 
         # Detect curl phases
-        if not self.rep_started and elbow_angle > 150:  # Starting position with arm extended
+        if not self.rep_started and elbow_angle > 150:
             self.rep_started = True
             self.current_state = "starting"
             feedback = "Begin the curl by bending your elbow"
 
         if self.rep_started:
             if self.current_state == "starting" and elbow_angle < 60:
-                # Arm curled up
                 self.current_state = "up"
                 feedback = "Good! Now lower the weight slowly"
 
             elif self.current_state == "up" and elbow_angle > 150:
-                # Arm back to starting position
                 self.current_state = "starting"
                 feedback = "Good rep! Keep your upper arm still"
                 count_rep = True
 
-        # Form feedback
         if not arm_stable:
             feedback = "Avoid swinging"
 
-        # If no specific feedback, give general guidance
         if not feedback:
             if self.current_state == "starting":
                 feedback = "Curl the weight up toward your shoulder"
@@ -403,6 +445,7 @@ class ExerciseWidget(QWidget):
                 feedback = "Slowly lower the weight back down"
 
         return feedback, count_rep
+
 
     def analyze_lunge(self, landmarks):
         """Analyze lunge form and count reps"""
@@ -747,3 +790,156 @@ class ExerciseWidget(QWidget):
     def closeEvent(self, event):
         self.stop_video()
         event.accept()
+
+
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("FitMate")
+        self.setMinimumSize(1200, 900)
+
+        # Create stacked widget to switch between screens
+        self.stacked_widget = QStackedWidget()
+
+        # Create the main menu widget
+        self.main_menu = QWidget()
+        self.radio_buttons ={}
+        self.voice_status = "no_speak"
+        self.create_main_menu()
+
+        # Add the main menu to the stacked widget
+        self.stacked_widget.addWidget(self.main_menu)
+
+        # Set as central widget
+        self.setCentralWidget(self.stacked_widget)
+       
+
+    def create_main_menu(self):
+        # Main layout
+        main_layout = QVBoxLayout()
+
+        # Title
+        title_label = QLabel("FitMate")
+        title_label.setFont(QFont('Blinker', 36, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label)
+
+        # Subtitle
+        subtitle_label = QLabel("Let's select an exercise to begin:")
+        subtitle_label.setFont(QFont('Blinker', 24))
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(subtitle_label)
+                # --- Add radio buttons section ---
+        radio_group_box = QGroupBox("Voice Options")
+        radio_layout = QHBoxLayout()
+
+        self.radio_buttons = {
+            "no_speak": QRadioButton("No Speak"),
+            "feedback": QRadioButton("Feedback"),
+            "counts": QRadioButton("Counts"),
+        }
+
+        # Set default checked radio button
+        self.radio_buttons["no_speak"].setChecked(True)
+
+
+        # Style the buttons
+        radio_layout.addStretch(1)
+        for rb in self.radio_buttons.values():
+            rb.setFont(QFont('Blinker', 20))
+            rb.setStyleSheet("QRadioButton { background-color: transparent; color: #FFF; }")
+            radio_layout.addWidget(rb)
+            radio_layout.addStretch(1)
+            rb.toggled.connect(self.update_voice_status)
+
+        radio_group_box.setLayout(radio_layout)
+        radio_group_box.setStyleSheet("QGroupBox { background-color: transparent; color : #32c2af; font-size: 28px; font-weight: bold; margin-top: -5px }")
+        main_layout.addWidget(radio_group_box)
+
+        # --- End of radio buttons section ---
+
+        # Exercise buttons in a grid layout
+        exercises_layout = QGridLayout()
+
+        # Define exercises
+        exercises = [
+            "Squat", "Deadlift", "Bicep Curl",
+            "Lunge", "Push-Up", "Shoulder Press"
+        ]
+
+        # Create buttons for each exercise
+        row, col = 0, 0
+        for exercise in exercises:
+            button = QPushButton(exercise)
+            button.setMinimumSize(200, 150)
+            button.setFont(QFont('Blinker', 20))
+            # Store the exercise name as property to access it when clicked
+            button.setProperty("exercise", exercise)
+            button.clicked.connect(self.open_exercise)
+
+            exercises_layout.addWidget(button, row, col)
+
+            # Update grid position
+            col += 1
+            if col > 1:  # 2 columns
+                col = 0
+                row += 1
+
+        # Add some spacing
+        main_layout.addSpacing(20)
+
+        # Add the grid to the main layout
+        main_layout.addLayout(exercises_layout)
+
+        # Add some spacing at the bottom
+        main_layout.addSpacing(20)
+
+        # Apply the layout to the main menu widget
+        self.main_menu.setLayout(main_layout)
+
+    def open_exercise(self):
+        # Get the sender button
+        button = self.sender()
+        exercise_name = button.property("exercise")
+
+        # Create exercise screen
+        exercise_widget = ExerciseWidget(exercise_name, self.voice_status)
+        exercise_widget.go_back_signal.connect(self.show_main_menu)
+
+        # Add to stacked widget and show it
+        self.stacked_widget.addWidget(exercise_widget)
+        self.stacked_widget.setCurrentWidget(exercise_widget)
+
+    def show_main_menu(self):
+        # Return to main menu and remove the exercise widget
+        self.stacked_widget.setCurrentWidget(self.main_menu)
+        # Remove the last widget (the exercise widget)
+        widget = self.stacked_widget.widget(self.stacked_widget.count() - 1)
+        self.stacked_widget.removeWidget(widget)
+        widget.deleteLater()
+
+    def update_voice_status(self):
+        for key, rb in self.radio_buttons.items():
+            if rb.isChecked():
+                self.voice_status = key  
+                break
+
+
+def main():
+    app = QApplication(sys.argv)
+    # Load and apply stylesheet
+    stylesheet = load_stylesheet("media/style.qss")
+    if stylesheet:
+        app.setStyleSheet(stylesheet)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

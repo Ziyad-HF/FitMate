@@ -7,7 +7,7 @@ from utils.helpers import load_stylesheet
 def main():
     app = QApplication(sys.argv)
     # Load and apply stylesheet
-    stylesheet = load_stylesheet("style.qss")
+    stylesheet = load_stylesheet("media/style.qss")
     if stylesheet:
         app.setStyleSheet(stylesheet)
     window = MainWindow()

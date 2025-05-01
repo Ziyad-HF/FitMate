@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
                              QPushButton, QLabel, QGridLayout,
-                             QStackedWidget)
+                             QStackedWidget, QGroupBox, QHBoxLayout, QRadioButton)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from gui.exercises_widget_ui import ExerciseWidget
@@ -19,6 +19,8 @@ class MainWindow(QMainWindow):
 
         # Create the main menu widget
         self.main_menu = QWidget()
+        self.radio_buttons ={}
+        self.voice_status = "no_speak"
         self.create_main_menu()
 
         # Add the main menu to the stacked widget
@@ -26,6 +28,7 @@ class MainWindow(QMainWindow):
 
         # Set as central widget
         self.setCentralWidget(self.stacked_widget)
+       
 
     def create_main_menu(self):
         # Main layout
@@ -42,6 +45,34 @@ class MainWindow(QMainWindow):
         subtitle_label.setFont(QFont('Blinker', 24))
         subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(subtitle_label)
+                # --- Add radio buttons section ---
+        radio_group_box = QGroupBox("Voice Options")
+        radio_layout = QHBoxLayout()
+
+        self.radio_buttons = {
+            "no_speak": QRadioButton("No Speak"),
+            "feedback": QRadioButton("Feedback"),
+            "counts": QRadioButton("Counts"),
+        }
+
+        # Set default checked radio button
+        self.radio_buttons["no_speak"].setChecked(True)
+
+
+        # Style the buttons
+        radio_layout.addStretch(1)
+        for rb in self.radio_buttons.values():
+            rb.setFont(QFont('Blinker', 20))
+            rb.setStyleSheet("QRadioButton { background-color: transparent; color: #FFF; }")
+            radio_layout.addWidget(rb)
+            radio_layout.addStretch(1)
+            rb.toggled.connect(self.update_voice_status)
+
+        radio_group_box.setLayout(radio_layout)
+        radio_group_box.setStyleSheet("QGroupBox { background-color: transparent; color : #32c2af; font-size: 28px; font-weight: bold; margin-top: -5px }")
+        main_layout.addWidget(radio_group_box)
+
+        # --- End of radio buttons section ---
 
         # Exercise buttons in a grid layout
         exercises_layout = QGridLayout()
@@ -88,7 +119,7 @@ class MainWindow(QMainWindow):
         exercise_name = button.property("exercise")
 
         # Create exercise screen
-        exercise_widget = ExerciseWidget(exercise_name)
+        exercise_widget = ExerciseWidget(exercise_name, self.voice_status)
         exercise_widget.go_back_signal.connect(self.show_main_menu)
 
         # Add to stacked widget and show it
@@ -102,3 +133,9 @@ class MainWindow(QMainWindow):
         widget = self.stacked_widget.widget(self.stacked_widget.count() - 1)
         self.stacked_widget.removeWidget(widget)
         widget.deleteLater()
+
+    def update_voice_status(self):
+        for key, rb in self.radio_buttons.items():
+            if rb.isChecked():
+                self.voice_status = key  
+                break
